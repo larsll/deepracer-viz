@@ -70,3 +70,31 @@ class Model:
             return cls(sess, metadata)
         except Exception as e:
             raise Exception("Could not get session for model: {}".format(e))
+        
+    @classmethod
+    def from_bytes(cls, model_bytes: bytes, metadata: ModelMetadata, log_device_placement: bool = False):
+        """Load the TensorFlow graph from a bytes array.
+        Args:
+            model_bytes (bytes): Bytes array containing the model.pb data
+        Raises:
+            Exception: If the session cannot be loaded from the model bytes.
+        Returns:
+            [tf1.Session]: TensorFlow session object.
+        """
+        try:
+            tf1.reset_default_graph()
+            sess = tf1.Session(
+                config=tf1.compat.v1.ConfigProto(
+                    allow_soft_placement=True, log_device_placement=log_device_placement
+                )
+            )
+
+            graph_def = tf1.GraphDef()
+            graph_def.ParseFromString(model_bytes)
+
+            sess.graph.as_default()
+            tf1.import_graph_def(graph_def, name="")
+
+            return cls(sess, metadata)
+        except Exception as e:
+            raise Exception("Could not get session for model: {}".format(e))
