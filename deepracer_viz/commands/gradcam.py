@@ -1,6 +1,6 @@
 import argparse
 import cv2
-from deepracer_viz.gradcam.cam import GradCam
+from deepracer_viz.gradcam.cam import METHODS, GradCam, select_target_layers
 from deepracer_viz.model.metadata import ModelMetadata
 from deepracer_viz.model.model import Model
 
@@ -12,7 +12,17 @@ from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageFont
 
-def gradcam_cmd(input_file, output_file, model, model_metadata, fps=15):
+def gradcam_cmd(
+    input_file,
+    output_file,
+    model,
+    model_metadata,
+    fps=15,
+    method="hirescam",
+    action=None,
+    continuous_target="steering",
+    layers=None,
+):
     capture = cv2.VideoCapture(input_file)
 
     CODEC = "MP4V"
@@ -25,8 +35,15 @@ def gradcam_cmd(input_file, output_file, model, model_metadata, fps=15):
     model = Model.from_file(model, metadata)
 
     with model.session as sess:
-        cam = GradCam(model, model.get_conv_outputs())
-        
+        cam = GradCam(
+            model,
+            select_target_layers(model, method, layers),
+            method=method,
+            action=action,
+            continuous_target=continuous_target,
+        )
+        continuous = metadata.action_space_type == "continuous"
+
         index = 0
         vidsize = (1280, 480)
         while capture.isOpened():
@@ -42,6 +59,11 @@ def gradcam_cmd(input_file, output_file, model, model_metadata, fps=15):
                 result, out_frame = cam.process(input_frame)
                 steer, speed = model.get_action(result)
 
+                if continuous:
+                    target_label = continuous_target
+                else:
+                    target_label = "action {}".format(np.argmax(result) if action is None else action)
+
                 # PILLOW CODE
                 frame = Image.new('RGBA', vidsize, color='#FFFFFF')
                 frame.paste(Image.fromarray(out_frame).resize((640, 480)), box=(0, 0))
@@ -50,7 +72,7 @@ def gradcam_cmd(input_file, output_file, model, model_metadata, fps=15):
                 draw = ImageDraw.Draw(frame)
                 fnt = ImageFont.truetype('/System/Library/Fonts/SFNS.ttf', 18)
 
-                draw.text((10,10), "GradCam", font=fnt, fill=(255,255,255,255))
+                draw.text((10,10), "{} ({})".format(METHODS[method], target_label), font=fnt, fill=(255,255,255,255))
                 draw.text((650,10), "Selected Action", font=fnt, fill=(255,255,255,255))
                 draw.text((1180,10), "Frame: {}".format(index), font=fnt, fill=(255,255,255,255))
 

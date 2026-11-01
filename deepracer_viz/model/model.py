@@ -1,12 +1,18 @@
-import tensorflow.compat.v1 as tf1
 import re
 
+import tensorflow.compat.v1 as tf1
 from deepracer_viz.model.metadata import ModelMetadata
+
 
 class Model:
     def __init__(self, session, metadata: ModelMetadata):
         self.metadata = metadata
         self.session = session
+
+        # Resolve input/output once, as ops added later (e.g. gradients) would change the first/last op.
+        ops = self.session.graph.get_operations()
+        self._input = ops[0].outputs[0]
+        self._output = ops[-1].outputs[0]
 
     def input_size(self):
         input = self.get_model_input()
@@ -26,16 +32,12 @@ class Model:
         return [op.outputs[0] for op in conv_ops]
 
     def get_model_input(self):
-        ops = self.session.graph.get_operations()
-
-        # Select first operation output tensor.
-        return ops[0].outputs[0]
+        # First operation output tensor of the loaded graph.
+        return self._input
 
     def get_model_output(self):
-        ops = self.session.graph.get_operations()
-
-        # Select last operation output tensor.
-        return ops[-1].outputs[0]
+        # Last operation output tensor of the loaded graph.
+        return self._output
 
     def get_model_convolutional_output(self):
         # Get last convolutional operator.
@@ -58,9 +60,7 @@ class Model:
         try:
             tf1.reset_default_graph()
             sess = tf1.Session(
-                config=tf1.compat.v1.ConfigProto(
-                    allow_soft_placement=True, log_device_placement=log_device_placement
-                )
+                config=tf1.compat.v1.ConfigProto(allow_soft_placement=True, log_device_placement=log_device_placement)
             )
 
             with tf1.io.gfile.GFile(model_pb_path, "rb") as f:
@@ -73,7 +73,7 @@ class Model:
             return cls(sess, metadata)
         except Exception as e:
             raise Exception("Could not get session for model: {}".format(e))
-        
+
     @classmethod
     def from_bytes(cls, model_bytes: bytes, metadata: ModelMetadata, log_device_placement: bool = False):
         """Load the TensorFlow graph from a bytes array.
@@ -87,9 +87,7 @@ class Model:
         try:
             tf1.reset_default_graph()
             sess = tf1.Session(
-                config=tf1.compat.v1.ConfigProto(
-                    allow_soft_placement=True, log_device_placement=log_device_placement
-                )
+                config=tf1.compat.v1.ConfigProto(allow_soft_placement=True, log_device_placement=log_device_placement)
             )
 
             graph_def = tf1.GraphDef()

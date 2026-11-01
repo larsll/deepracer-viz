@@ -128,3 +128,6 @@ dmypy.json
 
 # Test files
 test_data
+
+# Local scratch output
+tmp/
